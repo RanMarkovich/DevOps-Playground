@@ -138,7 +138,3 @@ The application can be deployed to:
 - Vercel (frontend)
 - Heroku/Railway/Render (backend)
 - MongoDB Atlas (database)
-
-## License
-
-[MIT](LICENSE) 
