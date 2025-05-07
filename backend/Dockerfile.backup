@@ -1,0 +1,31 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install Python, build dependencies, and OpenSSL 1.1 for Prisma
+RUN apk add --no-cache python3 make g++ gcc musl-dev openssl-dev
+
+# Create the missing symbolic link for libssl
+RUN mkdir -p /lib && \
+    ln -s /usr/lib/libssl.so /lib/libssl.so.1.1 && \
+    ln -s /usr/lib/libcrypto.so /lib/libcrypto.so.1.1
+
+# Copy package.json and package-lock.json
+COPY package.json ./
+COPY package-lock.json* ./
+COPY prisma ./prisma/
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the application
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Expose the port the app runs on
+EXPOSE 5000
+
+# Command to run the application
+CMD ["npm", "start"] 

@@ -1,0 +1,33 @@
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "backend:dev": "cd backend && npm run dev",
+    "backend:start": "cd backend && npm start",
+    "dev:all": "concurrently \"npm run dev\" \"npm run backend:dev\"",
+    "start:all": "concurrently \"npm run start\" \"npm run backend:start\"",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "prisma:generate": "npx prisma generate",
+    "prisma:studio": "npx prisma studio"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.5",
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "prisma": "^6.7.0",
+    "tailwindcss": "^4.1.5",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.7.0",
+    "next": "^15.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

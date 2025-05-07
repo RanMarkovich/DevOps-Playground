@@ -1,0 +1,72 @@
+services:
+  frontend:
+    container_name: frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mongodb://mongodb:27017/test-automation-db?directConnection=true&replicaSet=rs0
+      - JWT_SECRET=your-secret-key-for-jwt-authentication
+      - PORT=5000
+    depends_on:
+      - mongo-init
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  mongodb:
+    container_name: mongodb
+    image: mongo:6.0.12
+    ports:
+      - "27017:27017"
+    command: ["--replSet", "rs0", "--bind_ip_all", "--oplogSize", "128", "--setParameter", "transactionLifetimeLimitSeconds=1800"]
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app-network
+
+  mongo-init:
+    container_name: mongo-init
+    image: mongo:6.0.12
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./mongo-init.sh:/mongo-init.sh
+    entrypoint: ["/bin/bash", "/mongo-init.sh"]
+    networks:
+      - app-network
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge 

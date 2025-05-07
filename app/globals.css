@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apply gradient background to all pages */
+body {
+  @apply bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 min-h-screen;
+}
+
+/* Custom focus styles */
+input:focus, button:focus {
+  @apply outline-none ring-2 ring-indigo-400;
+}
+
+/* Add smooth transitions */
+button, a {
+  @apply transition duration-200;
+} 
