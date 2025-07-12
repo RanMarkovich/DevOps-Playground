@@ -1,0 +1,11 @@
+on: [push]
+
+jobs:
+  trigger_remote_ci_cd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger remote CI/CD
+        run: |
+          curl -X POST https://api.github.com/repos/RanM-DevOpsLabs/CI-CD-Labs/dispatches \
+            -H "Authorization: token ${{ secrets.CI_CD_LABS_TOKEN }}" \
+            -d '{"event_type":"trigger-from-repo-b"}'
