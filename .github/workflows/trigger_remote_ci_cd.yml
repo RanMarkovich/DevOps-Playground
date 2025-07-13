@@ -31,3 +31,6 @@ jobs:
     with:
       labels: ${{ needs.extract_metadata.outputs.labels }}
       tags: ${{ needs.extract_metadata.outputs.tags }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
