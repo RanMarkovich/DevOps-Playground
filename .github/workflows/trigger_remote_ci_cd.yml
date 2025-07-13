@@ -4,6 +4,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOCKER_IMAGE: ranmarkovich/devops-backend-app
+
 jobs:
   extract_metadata:
     runs-on: ubuntu-latest
