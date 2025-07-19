@@ -5,44 +5,53 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOCKER_IMAGE: ranmarkovich/devops-backend-app
+  DOCKER_REGISTRY: ranmarkovich/devops
 
 jobs:
   extract_metadata:
     runs-on: ubuntu-latest
     outputs:
-      tags: ${{ steps.meta.outputs.tags }}
-      labels: ${{ steps.meta.outputs.labels }}
+      backend_tags: ${{ steps.backend_meta.outputs.tags }}
+      backend_labels: ${{ steps.backend_meta.outputs.labels }}
+      frontend_tags: ${{ steps.frontend_meta.outputs.tags }}
+      frontend_labels: ${{ steps.frontend_meta.outputs.labels }}
     steps:
-      - name: Extract metadata
-        id: meta
+      - name: Extract backend metadata
+        id: backend_meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ env.DOCKER_REGISTRY }}-backend-app
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=commit-
+      
+      - name: Extract frontend metadata
+        id: frontend_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}-frontend-app
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=commit-
 
-  build_test_and_push_backend:
+  build_test_and_push:
     needs: extract_metadata
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context_path: ./backend
+          - name: frontend
+            context_path: .
     uses: RanM-DevOpsLabs/CI-CD-Labs/.github/workflows/backend-ci-cd.yml@main
     with:
-      context_path: ./backend
-      labels: ${{ needs.extract_metadata.outputs.labels }}
-      tags: ${{ needs.extract_metadata.outputs.tags }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-  build_test_and_push_frontend:
-    needs: extract_metadata
-    uses: RanM-DevOpsLabs/CI-CD-Labs/.github/workflows/backend-ci-cd.yml@main
-    with:
-      context_path: .
-      labels: ${{ needs.extract_metadata.outputs.labels }}
-      tags: ${{ needs.extract_metadata.outputs.tags }}
+      context_path: ${{ matrix.context_path }}
+      labels: ${{ matrix.name == 'backend' && needs.extract_metadata.outputs.backend_labels || needs.extract_metadata.outputs.frontend_labels }}
+      tags: ${{ matrix.name == 'backend' && needs.extract_metadata.outputs.backend_tags || needs.extract_metadata.outputs.frontend_tags }}
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
