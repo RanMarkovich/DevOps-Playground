@@ -1,0 +1,258 @@
+# ConfigMap for MongoDB configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-config
+  namespace: devops-playground
+data:
+  mongod.conf: |
+    replication:
+      replSetName: rs0
+    net:
+      bindIp: 0.0.0.0
+      port: 27017
+    storage:
+      dbPath: /data/db
+---
+# ConfigMap for MongoDB initialization script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-init-scripts
+  namespace: devops-playground
+data:
+  mongo-init.js: |
+    // Wait for MongoDB to start before configuring replica set
+    setTimeout(() => {
+      try {
+        // Initialize replica set
+        rs.initiate({
+          _id: "rs0",
+          members: [
+            { _id: 0, host: "mongodb-0.mongodb-headless:27017" }
+          ]
+        });
+        
+        console.log("MongoDB Replica Set initialized successfully");
+      } catch (error) {
+        console.error("Error initializing replica set:", error);
+      }
+    }, 5000);
+  mongo-init.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "Waiting for MongoDB to start (with retries)..."
+
+    # Wait for MongoDB to be ready
+    for i in {1..60}; do
+      echo "Attempt $i: Connecting to MongoDB..."
+      mongosh --host mongodb-0.mongodb-headless:27017 --eval 'db.runCommand({ping: 1})' &>/dev/null
+      if [ $? -eq 0 ]; then
+        echo "MongoDB is up and ready. Configuring replica set..."
+        break
+      fi
+      echo "MongoDB not yet available, retrying in 2 seconds..."
+      sleep 2
+      
+      # If we've reached our max retries, exit with error
+      if [ $i -eq 60 ]; then
+        echo "Failed to connect to MongoDB after 60 attempts"
+        exit 1
+      fi
+    done
+
+    # Initialize the replica set
+    echo "Initializing MongoDB replica set..."
+    mongosh --host mongodb-0.mongodb-headless:27017 <<EOF
+    try {
+      var status = rs.status();
+      if(status.ok === 0) {
+        printjson(rs.initiate({
+          _id: 'rs0',
+          members: [{ _id: 0, host: 'mongodb-0.mongodb-headless:27017', priority: 1 }]
+        }));
+        print('Initiated replica set');
+      } else {
+        print('Replica set already initialized');
+      }
+    } catch (err) {
+      print('Error checking replica set status: ' + err);
+      printjson(rs.initiate({
+        _id: 'rs0',
+        members: [{ _id: 0, host: 'mongodb-0.mongodb-headless:27017', priority: 1 }]
+      }));
+      print('Initiated replica set');
+    }
+    EOF
+
+    echo "MongoDB replica set initialization completed!"
+---
+# Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  namespace: devops-playground
+  labels:
+    app: mongodb
+spec:
+  clusterIP: None
+  ports:
+  - port: 27017
+    targetPort: 27017
+    protocol: TCP
+    name: mongodb
+  selector:
+    app: mongodb
+---
+# Service to expose MongoDB internally
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+  namespace: devops-playground
+spec:
+  ports:
+  - port: 27017
+    targetPort: 27017
+    protocol: TCP
+    name: mongodb
+  selector:
+    app: mongodb
+---
+# StatefulSet for MongoDB with replica set configuration
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: devops-playground
+  labels:
+    app: mongodb
+spec:
+  serviceName: mongodb-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: mongodb
+        image: mongo:8.0.9
+        ports:
+        - containerPort: 27017
+          protocol: TCP
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: ""
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          value: ""
+        command:
+        - mongod
+        - --bind_ip_all
+        - --replSet
+        - rs0
+        - --oplogSize
+        - "128"
+        - --setParameter
+        - transactionLifetimeLimitSeconds=1800
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        - name: mongodb-config-vol
+          mountPath: /etc/mongod.conf.d
+        - name: mongodb-init-scripts-vol
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.runCommand('ping').ok"
+            - --quiet
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.runCommand('ping').ok"
+            - --quiet
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
+      initContainers:
+      - name: mongodb-init
+        image: mongo:8.0.9
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Setting up MongoDB initialization..."
+          cp /scripts/mongo-init.sh /tmp/mongo-init.sh
+          chmod +x /tmp/mongo-init.sh
+          echo "Initialization setup completed"
+        volumeMounts:
+        - name: mongodb-init-scripts-vol
+          mountPath: /scripts
+      volumes:
+      - name: mongodb-config-vol
+        configMap:
+          name: mongodb-config
+      - name: mongodb-init-scripts-vol
+        configMap:
+          name: mongodb-init-scripts
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+---
+# Job to initialize MongoDB replica set (runs after MongoDB is ready)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-replica-init
+  namespace: devops-playground
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: mongo-init
+        image: mongo:8.0.9
+        command:
+        - /bin/bash
+        - /scripts/mongo-init.sh
+        volumeMounts:
+        - name: mongodb-init-scripts-vol
+          mountPath: /scripts
+      volumes:
+      - name: mongodb-init-scripts-vol
+        configMap:
+          name: mongodb-init-scripts
+          defaultMode: 0755 
