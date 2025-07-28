@@ -1,0 +1,123 @@
+# Namespace for the application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops-playground
+---
+# ConfigMap for non-sensitive environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-app-config
+  namespace: devops-playground
+data:
+  NODE_ENV: "production"
+  PORT: "5000"
+---
+# Deployment for the backend application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app-deployment
+  namespace: devops-playground
+  labels:
+    app: backend-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend-app
+  template:
+    metadata:
+      labels:
+        app: backend-app
+    spec:
+      containers:
+      - name: backend-app
+        image: ranmarkovich/devops-backend-app:main  # Replace with your actual image
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: backend-app-config
+              key: PORT
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: backend-app-config
+              key: NODE_ENV
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Always
+---
+# Service to expose the backend internally
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-app-service
+  namespace: devops-playground
+spec:
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: backend-app
+
+---
+# Optional: Ingress to expose backend externally
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: devops-playground
+  annotations:
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, Authorization"
+spec:
+  ingressClassName: nginx  # Adjust based on your ingress controller
+  rules:
+  - host: api.backend-app.com 
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-app-service
+            port:
+              number: 80
