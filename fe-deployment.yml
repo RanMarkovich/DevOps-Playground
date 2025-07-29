@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
       - name: frontend-app
-        image: ranmarkovich/devops-frontend-app:main  # Replace with your actual image
+        image: ranmarkovich/devops-frontend-app:main
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

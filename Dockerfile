@@ -17,6 +17,9 @@ COPY . .
 # Create public directory if it doesn't exist
 RUN mkdir -p public
 
+# Accept build arguments for environment variables
+ENV NEXT_PUBLIC_API_URL=http://backend-app-service
+
 # Next.js collects completely anonymous telemetry data about general usage
 ENV NEXT_TELEMETRY_DISABLED 1
 
