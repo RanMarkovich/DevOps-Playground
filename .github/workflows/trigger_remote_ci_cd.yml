@@ -47,14 +47,12 @@ jobs:
             context_path: ./backend
           - name: frontend
             context_path: .
-            build_args:
-              - NEXT_PUBLIC_API_URL=http://backend-app-service
     uses: RanM-DevOpsLabs/CI-CD-Labs/.github/workflows/backend-ci-cd.yml@main
     with:
       context_path: ${{ matrix.context_path }}
       labels: ${{ matrix.name == 'backend' && needs.extract_metadata.outputs.backend_labels || needs.extract_metadata.outputs.frontend_labels }}
       tags: ${{ matrix.name == 'backend' && needs.extract_metadata.outputs.backend_tags || needs.extract_metadata.outputs.frontend_tags }}
-      build_args: ${{ matrix.name == 'frontend' && matrix.build_args }}
+      build_args: ${{ matrix.name == 'frontend' && 'NEXT_PUBLIC_API_URL=http://backend-app-service' || '' }}
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
